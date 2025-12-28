@@ -58,12 +58,15 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Docker Image
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         working-directory: agent
         run: |
-          docker build -t ${{ steps.ecr.outputs.url }}:latest .
-          docker push ${{ steps.ecr.outputs.url }}:latest
+          docker buildx build --platform linux/arm64 -t ${{ steps.ecr.outputs.url }}:latest --push .
 
       - name: Terraform Apply (Full)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
