@@ -159,7 +159,7 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
 
 resource "aws_bedrockagentcore_agent_runtime" "mojobot_runtime" {
   count              = var.container_image_uri != "" ? 1 : 0
-  agent_runtime_name = "${var.app_name}-agent-runtime"
+  agent_runtime_name = "${var.app_name}_agent_runtime"
   role_arn           = aws_iam_role.mojobot_runtime_role.arn
 
   agent_runtime_artifact {
