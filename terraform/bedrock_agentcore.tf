@@ -47,7 +47,7 @@ resource "aws_iam_role" "mojobot_runtime_role" {
           "aws:SourceAccount" = data.aws_caller_identity.current.account_id
         }
         ArnLike = {
-          "aws:SourceArn" = "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+          "aws:SourceArn" = "arn:aws:bedrock-agentcore:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
         }
       }
     }]
@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer"
         ]
-        Resource = "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/*"
+        Resource = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/*"
       },
       {
         Sid    = "ECRTokenAccess"
@@ -83,13 +83,13 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
           "logs:DescribeLogStreams",
           "logs:CreateLogGroup"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*"
       },
       {
         Sid    = "CloudWatchLogsDescribe"
         Effect = "Allow"
         Action = ["logs:DescribeLogGroups"]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:*"
       },
       {
         Sid    = "CloudWatchLogsWrite"
@@ -98,7 +98,7 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
       },
       {
         Sid    = "XRayTracing"
@@ -131,7 +131,7 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
         ]
         Resource = [
           "arn:aws:bedrock:*::foundation-model/*",
-          "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+          "arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
         ]
       }
     ]
