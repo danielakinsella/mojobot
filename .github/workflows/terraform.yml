@@ -1,14 +1,10 @@
-name: Terraform Deploy
+name: Deploy Mojobot
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'terraform/**'
   pull_request:
     branches: [main]
-    paths:
-      - 'terraform/**'
   workflow_dispatch:
 
 env:
@@ -21,12 +17,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  terraform:
-    name: Terraform
+  deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: terraform
 
     steps:
       - name: Checkout
@@ -42,49 +35,42 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Format
-        id: fmt
-        run: terraform fmt -check
-        continue-on-error: true
+          terraform_wrapper: false
 
       - name: Terraform Init
-        id: init
+        working-directory: terraform
         run: terraform init
 
-      - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-
-      - name: Terraform Plan
-        id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -no-color -input=false
-        continue-on-error: true
-
-      - name: Comment PR
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
-        with:
-          script: |
-            const output = `#### Terraform Format 🖌 \`${{ steps.fmt.outcome }}\`
-            #### Terraform Init ⚙️ \`${{ steps.init.outcome }}\`
-            #### Terraform Validate 🤖 \`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖 \`${{ steps.plan.outcome }}\`
-
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
-
-      - name: Terraform Apply
+      - name: Terraform Apply (ECR only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -input=false
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false -target=aws_ecr_repository.mojobot_agent
+
+      - name: Get ECR Repository URL
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: ecr
+        working-directory: terraform
+        run: |
+          ECR_URL=$(terraform output -raw ecr_repository_url)
+          echo "url=$ECR_URL" >> $GITHUB_OUTPUT
+
+      - name: Login to Amazon ECR
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: agent
+        run: |
+          docker build -t ${{ steps.ecr.outputs.url }}:latest .
+          docker push ${{ steps.ecr.outputs.url }}:latest
+
+      - name: Terraform Apply (Full)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false -var="container_image_uri=${{ steps.ecr.outputs.url }}:latest"
+
+      - name: Terraform Plan (PR)
+        if: github.event_name == 'pull_request'
+        working-directory: terraform
+        run: terraform plan -no-color -input=false

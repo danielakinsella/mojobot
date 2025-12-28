@@ -11,6 +11,7 @@ variable "app_name" {
 variable "container_image_uri" {
   description = "ECR container image URI for the agent runtime"
   type        = string
+  default     = ""
 }
 
 variable "aws_region" {
@@ -25,6 +26,20 @@ variable "aws_region" {
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+################################################################################
+# ECR Repository for Mojobot Agent
+################################################################################
+
+resource "aws_ecr_repository" "mojobot_agent" {
+  name                 = "${var.app_name}-agent"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
 
 ################################################################################
 # IAM Role for Mojobot AgentCore Runtime
@@ -71,9 +86,9 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
         Resource = "arn:aws:ecr:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:repository/*"
       },
       {
-        Sid    = "ECRTokenAccess"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "ECRTokenAccess"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
@@ -86,9 +101,9 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
         Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*"
       },
       {
-        Sid    = "CloudWatchLogsDescribe"
-        Effect = "Allow"
-        Action = ["logs:DescribeLogGroups"]
+        Sid      = "CloudWatchLogsDescribe"
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogGroups"]
         Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:*"
       },
       {
@@ -112,10 +127,10 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
         Resource = "*"
       },
       {
-        Sid       = "CloudWatchMetrics"
-        Effect    = "Allow"
-        Action    = "cloudwatch:PutMetricData"
-        Resource  = "*"
+        Sid      = "CloudWatchMetrics"
+        Effect   = "Allow"
+        Action   = "cloudwatch:PutMetricData"
+        Resource = "*"
         Condition = {
           StringEquals = {
             "cloudwatch:namespace" = "bedrock-agentcore"
@@ -143,6 +158,7 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
 ################################################################################
 
 resource "aws_bedrockagentcore_agent_runtime" "mojobot_runtime" {
+  count              = var.container_image_uri != "" ? 1 : 0
   agent_runtime_name = "${var.app_name}-agent-runtime"
   role_arn           = aws_iam_role.mojobot_runtime_role.arn
 
