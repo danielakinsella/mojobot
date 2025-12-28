@@ -25,9 +25,32 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
     AWSTemplateFormatVersion = "2010-09-09"
     Description              = "Bedrock Knowledge Base with S3 Vectors for Mojobot"
     Resources = {
+      VectorBucket = {
+        Type = "AWS::S3Vectors::VectorBucket"
+        Properties = {
+          VectorBucketName = "${var.app_name}-vectors-${data.aws_caller_identity.current.account_id}"
+        }
+      }
+      VectorIndex = {
+        Type = "AWS::S3Vectors::Index"
+        DependsOn = ["VectorBucket"]
+        Properties = {
+          VectorBucketName = "${var.app_name}-vectors-${data.aws_caller_identity.current.account_id}"
+          IndexName        = "${var.app_name}-kb-index"
+          MetadataConfiguration = {
+            MetadataType = "BEDROCK_MANAGED"
+          }
+          EmbeddingConfiguration = {
+            EmbeddingType = "BEDROCK_MANAGED"
+            Model = {
+              ModelArn = "arn:aws:bedrock:${data.aws_region.current.id}::foundation-model/amazon.titan-embed-text-v2:0"
+            }
+          }
+        }
+      }
       KnowledgeBase = {
         Type = "AWS::Bedrock::KnowledgeBase"
-        DependsOn = ["VectorBucket"]
+        DependsOn = ["VectorIndex"]
         Properties = {
           Name    = "${var.app_name}_diary_kb"
           RoleArn = aws_iam_role.mojobot_kb_role.arn
@@ -40,22 +63,17 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
           StorageConfiguration = {
             Type = "S3_VECTORS"
             S3VectorsConfiguration = {
-              VectorBucketArn = { "Fn::GetAtt" = ["VectorBucket", "VectorBucketArn"] }
+              IndexArn  = { "Fn::GetAtt" = ["VectorIndex", "IndexArn"] }
+              IndexName = "${var.app_name}-kb-index"
             }
           }
-        }
-      }
-      VectorBucket = {
-        Type = "AWS::S3Vectors::VectorBucket"
-        Properties = {
-          VectorBucketName = "${var.app_name}-vectors-${data.aws_caller_identity.current.account_id}"
         }
       }
       DataSource = {
         Type = "AWS::Bedrock::DataSource"
         Properties = {
-          Name              = "${var.app_name}_diary_source"
-          KnowledgeBaseId   = { "Fn::GetAtt" = ["KnowledgeBase", "KnowledgeBaseId"] }
+          Name               = "${var.app_name}_diary_source"
+          KnowledgeBaseId    = { "Fn::GetAtt" = ["KnowledgeBase", "KnowledgeBaseId"] }
           DataDeletionPolicy = "DELETE"
           DataSourceConfiguration = {
             Type = "S3"
@@ -72,6 +90,9 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
       }
       VectorBucketArn = {
         Value = { "Fn::GetAtt" = ["VectorBucket", "VectorBucketArn"] }
+      }
+      IndexArn = {
+        Value = { "Fn::GetAtt" = ["VectorIndex", "IndexArn"] }
       }
     }
   })
