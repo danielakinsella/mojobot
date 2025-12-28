@@ -32,20 +32,14 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
         }
       }
       VectorIndex = {
-        Type = "AWS::S3Vectors::Index"
+        Type      = "AWS::S3Vectors::Index"
         DependsOn = ["VectorBucket"]
         Properties = {
           VectorBucketName = "${var.app_name}-vectors-${data.aws_caller_identity.current.account_id}"
           IndexName        = "${var.app_name}-kb-index"
-          MetadataConfiguration = {
-            MetadataType = "BEDROCK_MANAGED"
-          }
-          EmbeddingConfiguration = {
-            EmbeddingType = "BEDROCK_MANAGED"
-            Model = {
-              ModelArn = "arn:aws:bedrock:${data.aws_region.current.id}::foundation-model/amazon.titan-embed-text-v2:0"
-            }
-          }
+          DataType         = "float32"
+          Dimension        = 1024
+          DistanceMetric   = "cosine"
         }
       }
       KnowledgeBase = {
