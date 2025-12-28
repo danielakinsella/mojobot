@@ -83,12 +83,12 @@ app.post("/invocations", async (req: Request, res: Response) => {
     const diaryContext = await retrieveFromKnowledgeBase(prompt);
 
     // Build system prompt with diary context
-    let systemPrompt = baseSystemPrompt;
+    let finalSystemPrompt = baseSystemPrompt;
     if (diaryContext) {
-      systemPrompt += `\n\nHere are relevant entries from your diary that may help you respond:\n\n${diaryContext}`;
+      finalSystemPrompt += `\n\nHere are relevant entries from your diary that may help you respond:\n\n${diaryContext}`;
     }
 
-    const messages = [new SystemMessage(systemPrompt), new HumanMessage(prompt)];
+    const messages = [new SystemMessage(finalSystemPrompt), new HumanMessage(prompt)];
 
     const parser = new StringOutputParser();
     const response = await model.pipe(parser).invoke(messages);
