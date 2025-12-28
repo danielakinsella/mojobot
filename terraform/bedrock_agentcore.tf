@@ -1,0 +1,158 @@
+################################################################################
+# Variables
+################################################################################
+
+variable "app_name" {
+  description = "Application name prefix"
+  type        = string
+  default     = "mojobot"
+}
+
+variable "container_image_uri" {
+  description = "ECR container image URI for the agent runtime"
+  type        = string
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
+################################################################################
+# Data Sources
+################################################################################
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+################################################################################
+# IAM Role for Mojobot AgentCore Runtime
+################################################################################
+
+resource "aws_iam_role" "mojobot_runtime_role" {
+  name = "${var.app_name}-runtime-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AssumeRolePolicy"
+      Effect = "Allow"
+      Action = "sts:AssumeRole"
+      Principal = {
+        Service = "bedrock-agentcore.amazonaws.com"
+      }
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+        }
+        ArnLike = {
+          "aws:SourceArn" = "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "mojobot_runtime_policy" {
+  role = aws_iam_role.mojobot_runtime_role.id
+  name = "${var.app_name}-runtime-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRImageAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/*"
+      },
+      {
+        Sid    = "ECRTokenAccess"
+        Effect = "Allow"
+        Action = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "CloudWatchLogsCreate"
+        Effect = "Allow"
+        Action = [
+          "logs:DescribeLogStreams",
+          "logs:CreateLogGroup"
+        ]
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*"
+      },
+      {
+        Sid    = "CloudWatchLogsDescribe"
+        Effect = "Allow"
+        Action = ["logs:DescribeLogGroups"]
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+      },
+      {
+        Sid    = "CloudWatchLogsWrite"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
+      },
+      {
+        Sid    = "XRayTracing"
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+          "xray:GetSamplingRules",
+          "xray:GetSamplingTargets"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid       = "CloudWatchMetrics"
+        Effect    = "Allow"
+        Action    = "cloudwatch:PutMetricData"
+        Resource  = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "bedrock-agentcore"
+          }
+        }
+      },
+      {
+        Sid    = "BedrockModelInvocation"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+        ]
+      }
+    ]
+  })
+}
+
+################################################################################
+# Mojobot AgentCore Runtime
+################################################################################
+
+resource "aws_bedrockagentcore_agent_runtime" "mojobot_runtime" {
+  agent_runtime_name = "${var.app_name}-agent-runtime"
+  role_arn           = aws_iam_role.mojobot_runtime_role.arn
+
+  agent_runtime_artifact {
+    container_configuration {
+      container_uri = var.container_image_uri
+    }
+  }
+
+  network_configuration {
+    network_mode = "PUBLIC"
+  }
+}
