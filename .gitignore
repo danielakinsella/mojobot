@@ -1,3 +1,10 @@
 agent/node_modules
 .vscode
 agent/src/mojoanswers
+
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

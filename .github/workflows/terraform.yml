@@ -37,9 +37,15 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Get AWS Account ID
+        id: aws
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=mojobot-terraform-state-${{ steps.aws.outputs.account_id }}"
 
       - name: Terraform Apply (ECR only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

@@ -7,6 +7,12 @@ terraform {
   }
 
   required_version = ">= 1.14.3"
+
+  backend "s3" {
+    bucket = "mojobot-terraform-state"
+    key    = "mojobot/terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 output "agentcore_runtime_id" {
