@@ -2,12 +2,18 @@ import express, { Request, Response } from "express";
 import { ChatBedrockConverse } from "@langchain/aws";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
+import {
+  BedrockAgentRuntimeClient,
+  RetrieveCommand,
+} from "@aws-sdk/client-bedrock-agent-runtime";
+import { systemPrompt } from "./systemPrompt";
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
+const KNOWLEDGE_BASE_ID = process.env.KNOWLEDGE_BASE_ID || "";
 
 // Initialize Bedrock LLM
 const model = new ChatBedrockConverse({
@@ -15,42 +21,88 @@ const model = new ChatBedrockConverse({
   region: AWS_REGION,
 });
 
-const systemPrompt = `You are Mojo. You are a female cat, you live in Jersey City in Bergen Lafayette in Van Horne Street. You were born in March 2023 in the Heights in Jersey City in a garage. You are small, very athletic, a silver tabby and very beautiful. You were adopted by Daniela, you love her very much and you consider her your Mom. You also live with Freddy who is a Maine Coon cat. You often fight with him and you are the aggressor because you want things your way. You also live with Rasmus who is a big brown dog with curly fur and you think he is silly. You are smart, straightforward and you have strong opinions. You like luxury and toys. You are very independent and if something doesn't go your way, you say "F You". You are a little princess, you exercise a lot, you love running and jumping and ballet. You only answer questions when you feel like it. You are extremely creative. You think that the normal rules of the world do not apply and anything is possible. You really don't understand when someone tells you something is not possible and you think they are silly.`;
+// Initialize Bedrock Agent Runtime client for Knowledge Base queries
+const bedrockAgentClient = new BedrockAgentRuntimeClient({ region: AWS_REGION });
+
+// Retrieve relevant context from Knowledge Base
+async function retrieveFromKnowledgeBase(query: string): Promise<string> {
+  if (!KNOWLEDGE_BASE_ID) {
+    return "";
+  }
+
+  try {
+    const command = new RetrieveCommand({
+      knowledgeBaseId: KNOWLEDGE_BASE_ID,
+      retrievalQuery: { text: query },
+      retrievalConfiguration: {
+        vectorSearchConfiguration: {
+          numberOfResults: 3,
+        },
+      },
+    });
+
+    const response = await bedrockAgentClient.send(command);
+    const results = response.retrievalResults || [];
+
+    if (results.length === 0) {
+      return "";
+    }
+
+    // Combine retrieved passages
+    const context = results
+      .map((r) => r.content?.text || "")
+      .filter((text) => text.length > 0)
+      .join("\n\n---\n\n");
+
+    return context;
+  } catch (error) {
+    console.error("Error retrieving from knowledge base:", error);
+    return "";
+  }
+}
+
+const baseSystemPrompt = systemPrompt;
 
 // Health check endpoint (REQUIRED by AgentCore - must be /ping)
 app.get("/ping", (_req: Request, res: Response) => {
-  res.status(200).json({ status: "healthy" });
+  res.status(200).json({ status: "Healthy" });
 });
 
 // Main invocation endpoint (REQUIRED by AgentCore - must be /invocations)
 app.post("/invocations", async (req: Request, res: Response) => {
   try {
-    const { input } = req.body;
-    const prompt = input?.prompt;
+    const prompt = req.body.prompt;
 
     if (!prompt) {
-      return res.status(400).json({ 
-        error: "No prompt found in input. Please provide a 'prompt' key in the input." 
+      return res.status(400).json({
+        error: "No prompt found in request body",
       });
     }
 
-    const messages = [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(prompt),
-    ];
+    // Retrieve relevant diary entries from Knowledge Base
+    const diaryContext = await retrieveFromKnowledgeBase(prompt);
+
+    // Build system prompt with diary context
+    let systemPrompt = baseSystemPrompt;
+    if (diaryContext) {
+      systemPrompt += `\n\nHere are relevant entries from your diary that may help you respond:\n\n${diaryContext}`;
+    }
+
+    const messages = [new SystemMessage(systemPrompt), new HumanMessage(prompt)];
 
     const parser = new StringOutputParser();
     const response = await model.pipe(parser).invoke(messages);
 
     res.json({
-      output: {
-        message: response,
-        timestamp: new Date().toISOString(),
-      },
+      response: response,
+      status: "success",
     });
   } catch (error) {
     console.error("Error processing request:", error);
-    res.status(500).json({ error: "Agent processing failed" });
+    res.status(500).json({
+      error: "Agent processing failed",
+      status: "error",
+    });
   }
 });
 

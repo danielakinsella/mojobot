@@ -148,6 +148,15 @@ resource "aws_iam_role_policy" "mojobot_runtime_policy" {
           "arn:aws:bedrock:*::foundation-model/*",
           "arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
         ]
+      },
+      {
+        Sid    = "KnowledgeBaseRetrieve"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Retrieve",
+          "bedrock:RetrieveAndGenerate"
+        ]
+        Resource = "arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:knowledge-base/*"
       }
     ]
   })
@@ -170,5 +179,10 @@ resource "aws_bedrockagentcore_agent_runtime" "mojobot_runtime" {
 
   network_configuration {
     network_mode = "PUBLIC"
+  }
+
+  environment_variables = {
+    AWS_REGION        = data.aws_region.current.id
+    KNOWLEDGE_BASE_ID = aws_cloudformation_stack.mojobot_knowledge_base.outputs["KnowledgeBaseId"]
   }
 }
