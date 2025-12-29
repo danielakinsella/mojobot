@@ -57,8 +57,7 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
           StorageConfiguration = {
             Type = "S3_VECTORS"
             S3VectorsConfiguration = {
-              IndexArn  = { "Fn::GetAtt" = ["VectorIndex", "IndexArn"] }
-              IndexName = "${var.app_name}-kb-index"
+              IndexArn = { "Fn::GetAtt" = ["VectorIndex", "IndexArn"] }
             }
           }
         }
