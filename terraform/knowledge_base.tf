@@ -81,6 +81,9 @@ resource "aws_cloudformation_stack" "mojobot_knowledge_base" {
       KnowledgeBaseId = {
         Value = { "Fn::GetAtt" = ["KnowledgeBase", "KnowledgeBaseId"] }
       }
+      DataSourceId = {
+        Value = { "Fn::GetAtt" = ["DataSource", "DataSourceId"] }
+      }
       VectorBucketArn = {
         Value = { "Fn::GetAtt" = ["VectorBucket", "VectorBucketArn"] }
       }
@@ -161,6 +164,109 @@ resource "aws_iam_role_policy" "mojobot_kb_policy" {
       }
     ]
   })
+}
+
+################################################################################
+# Lambda for Auto-Sync on S3 Upload
+################################################################################
+
+resource "aws_lambda_function" "kb_sync" {
+  function_name = "${var.app_name}-kb-sync"
+  runtime       = "python3.12"
+  handler       = "index.handler"
+  role          = aws_iam_role.kb_sync_role.arn
+  timeout       = 30
+
+  filename         = data.archive_file.kb_sync_lambda.output_path
+  source_code_hash = data.archive_file.kb_sync_lambda.output_base64sha256
+
+  environment {
+    variables = {
+      KNOWLEDGE_BASE_ID = aws_cloudformation_stack.mojobot_knowledge_base.outputs["KnowledgeBaseId"]
+      DATA_SOURCE_ID    = aws_cloudformation_stack.mojobot_knowledge_base.outputs["DataSourceId"]
+    }
+  }
+}
+
+data "archive_file" "kb_sync_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/kb_sync_lambda.zip"
+
+  source {
+    content  = <<-EOF
+      import boto3
+      import os
+
+      def handler(event, context):
+          client = boto3.client('bedrock-agent')
+          response = client.start_ingestion_job(
+              knowledgeBaseId=os.environ['KNOWLEDGE_BASE_ID'],
+              dataSourceId=os.environ['DATA_SOURCE_ID']
+          )
+          print(f"Started ingestion job: {response['ingestionJob']['ingestionJobId']}")
+          return {'statusCode': 200}
+    EOF
+    filename = "index.py"
+  }
+}
+
+resource "aws_iam_role" "kb_sync_role" {
+  name = "${var.app_name}-kb-sync-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRole"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "kb_sync_policy" {
+  role = aws_iam_role.kb_sync_role.id
+  name = "${var.app_name}-kb-sync-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["bedrock:StartIngestionJob"]
+        Resource = "arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:knowledge-base/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_permission" "s3_invoke" {
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.kb_sync.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.mojobot_diary.arn
+}
+
+resource "aws_s3_bucket_notification" "diary_notification" {
+  bucket = aws_s3_bucket.mojobot_diary.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.kb_sync.arn
+    events              = ["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]
+  }
+
+  depends_on = [aws_lambda_permission.s3_invoke]
 }
 
 ################################################################################
