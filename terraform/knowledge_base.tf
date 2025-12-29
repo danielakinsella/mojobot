@@ -196,15 +196,30 @@ data "archive_file" "kb_sync_lambda" {
     content  = <<-EOF
       import boto3
       import os
+      import logging
+
+      logger = logging.getLogger()
+      logger.setLevel(logging.INFO)
 
       def handler(event, context):
           client = boto3.client('bedrock-agent')
-          response = client.start_ingestion_job(
-              knowledgeBaseId=os.environ['KNOWLEDGE_BASE_ID'],
-              dataSourceId=os.environ['DATA_SOURCE_ID']
-          )
-          print(f"Started ingestion job: {response['ingestionJob']['ingestionJobId']}")
-          return {'statusCode': 200}
+          try:
+              response = client.start_ingestion_job(
+                  knowledgeBaseId=os.environ['KNOWLEDGE_BASE_ID'],
+                  dataSourceId=os.environ['DATA_SOURCE_ID']
+              )
+              ingestion_job_id = response.get('ingestionJob', {}).get('ingestionJobId')
+              logger.info("Started ingestion job: %s", ingestion_job_id)
+              return {
+                  'statusCode': 200,
+                  'body': f"Started ingestion job: {ingestion_job_id}"
+              }
+          except Exception as e:
+              logger.error("Failed to start ingestion job", exc_info=True)
+              return {
+                  'statusCode': 500,
+                  'body': "Failed to start ingestion job"
+              }
     EOF
     filename = "index.py"
   }
