@@ -234,7 +234,7 @@ resource "aws_iam_role_policy" "kb_sync_policy" {
     Statement = [
       {
         Effect = "Allow"
-        Action = ["bedrock:StartIngestionJob"]
+        Action = ["bedrock-agent:StartIngestionJob"]
         Resource = "arn:aws:bedrock:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:knowledge-base/*"
       },
       {
