@@ -1,31 +1,50 @@
 # Mojobot
 
-Meet **Mojo**: a curious tabby cat who lives in this repo.
+A chatbot application powered by LangChain and Amazon Bedrock
 
-Mojobot is a friendly **chatbot** that answers questions in Mojo’s voice—playful, a little cheeky, and (usually) helpful.
+## Architecture
 
-## What it does
+## Requirements
 
-- **Chat with Mojo** about whatever’s on your mind
-- Mojo can pull from a **Diary** (a small knowledge base) so answers can be grounded in “things Mojo knows”
-- The Diary can be **updated** as Mojo learns new facts, stories, and preferences
+1. Node.js 20+
+2. AWS account with Bedrock access
+3. Knowledge Base configured (see terraform)
 
-## The Diary (knowledge base)
+## Setup
 
-Think of the Diary as Mojo’s memory.
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Configure environment variables
+4. Run locally: `npm run dev`
 
-- Add new entries when Mojo discovers something
-- Update or refine existing entries when details change
-- Keep it lighthearted, factual, or both—Mojo won’t judge (much)
+## Deployment
 
-## How it’s built (quick peek)
+Deployment is handled via GitHub Actions and Terraform
 
-Without getting too technical:
+## Usage
 
-- Runs on **AWS** for the cloud bits
-- Uses **Terraform** to set up infrastructure in a repeatable way
-- Uses **GitHub Actions** to automatically test and deploy changes
+## Technical tools used
 
----
-
-If Mojo replies with a slow blink, that means “thank you.”
+- Node.js 20
+- TypeScript
+- Express
+- LangChain
+- @langchain/aws
+- @aws-sdk/client-bedrock-agent-runtime
+- Amazon Bedrock (Nova Lite model)
+- Amazon Bedrock Knowledge Bases (S3 Vectors, Titan Embed Text v2)
+- Amazon Bedrock AgentCore
+- Amazon S3
+- AWS Lambda
+- Amazon ECR
+- AWS IAM
+- Amazon CloudWatch Logs
+- AWS X-Ray
+- Terraform
+- GitHub Actions
+- Docker
+- Docker Buildx
+- aws-actions/configure-aws-credentials
+- aws-actions/amazon-ecr-login
+- hashicorp/setup-terraform
+- actions/checkout
